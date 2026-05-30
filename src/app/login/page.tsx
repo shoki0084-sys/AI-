@@ -9,7 +9,6 @@ import { hasSupabaseEnv, SUPABASE_ENV_ERROR } from '@/lib/env';
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const configError = searchParams.get('error') === 'config';
   const nextPath = searchParams.get('next') || '/';
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -17,7 +16,7 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(
-    configError || !hasSupabaseEnv() ? SUPABASE_ENV_ERROR : null
+    !hasSupabaseEnv() ? SUPABASE_ENV_ERROR : null
   );
 
   const onSubmit = async (e: React.FormEvent) => {
