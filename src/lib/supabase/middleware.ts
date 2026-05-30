@@ -4,6 +4,14 @@ import { hasSupabaseEnv } from '@/lib/env';
 
 const PUBLIC_PATHS = ['/login', '/auth/callback'];
 
+/** リダイレクト時も getUser() で更新したセッション Cookie を引き継ぐ */
+function withSessionCookies(from: NextResponse, to: NextResponse) {
+  from.cookies.getAll().forEach(({ name, value }) => {
+    to.cookies.set(name, value);
+  });
+  return to;
+}
+
 export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -54,14 +62,14 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
-    return NextResponse.redirect(url);
+    return withSessionCookies(response, NextResponse.redirect(url));
   }
 
   if (user && pathname === '/login') {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     url.search = '';
-    return NextResponse.redirect(url);
+    return withSessionCookies(response, NextResponse.redirect(url));
   }
 
   return response;

@@ -1,23 +1,36 @@
 'use client';
 
 import { Suspense, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { ensureUserProfile } from '@/lib/auth/ensure-profile';
 import { hasSupabaseEnv, SUPABASE_ENV_ERROR } from '@/lib/env';
 
+function formatAuthError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes('Invalid login credentials')) {
+    return 'メールアドレスまたはパスワードが正しくありません。本番では新規登録が必要な場合があります。';
+  }
+  if (msg.includes('Email not confirmed')) {
+    return 'メールの確認が完了していません。登録時に届いた確認メールのリンクを開いてから、再度ログインしてください。';
+  }
+  return msg;
+}
+
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get('next') || '/';
+  const authError = searchParams.get('error') === 'auth';
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(
-    !hasSupabaseEnv() ? SUPABASE_ENV_ERROR : null
-  );
+  const [message, setMessage] = useState<string | null>(() => {
+    if (!hasSupabaseEnv()) return SUPABASE_ENV_ERROR;
+    if (authError) return '認証に失敗しました。もう一度ログインしてください。';
+    return null;
+  });
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,9 +39,14 @@ function LoginForm() {
 
     try {
       const supabase = createClient();
+      const redirectTo = `${window.location.origin}/auth/callback`;
       const authResult =
         mode === 'register'
-          ? await supabase.auth.signUp({ email, password })
+          ? await supabase.auth.signUp({
+              email,
+              password,
+              options: { emailRedirectTo: redirectTo },
+            })
           : await supabase.auth.signInWithPassword({ email, password });
 
       if (authResult.error) throw authResult.error;
@@ -49,10 +67,17 @@ function LoginForm() {
       }
 
       await ensureUserProfile(supabase, user.id);
-      router.replace(nextPath);
-      router.refresh();
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('セッションを取得できませんでした。ページを再読み込みして再度お試しください。');
+      }
+
+      // クライアント遷移だと Middleware に Cookie が届かないことがあるためフルリロード
+      window.location.assign(nextPath);
+      return;
     } catch (err) {
-      setMessage(`⚠️ ${(err as Error).message}`);
+      setMessage(`⚠️ ${formatAuthError(err)}`);
     } finally {
       setSubmitting(false);
     }
