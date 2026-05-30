@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: ai-bodymake
+    runtime: node
+    plan: starter
+    region: singapore
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.1
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: LINE_CHANNEL_SECRET
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+
+  - type: cron
+    name: ai-bodymake-reminder
+    runtime: docker
+    schedule: "0 0 * * *"
+    buildCommand: ""
+    startCommand: >
+      curl -fsS -H "Authorization: Bearer $CRON_SECRET"
+      "$APP_URL/api/cron/reminder"
+    envVars:
+      - key: APP_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false
