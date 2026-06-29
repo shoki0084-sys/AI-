@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 import { parseApiResponse } from '@/lib/api-client';
+import {
+  ButtonLoadingContent,
+  FormLoadingOverlay,
+} from '@/components/ui/Loading';
 
 type Props = {
   onSaved?: () => void;
@@ -49,7 +53,8 @@ export default function WeightForm({ onSaved }: Props) {
   };
 
   return (
-    <form onSubmit={onSubmit} className="card space-y-4">
+    <form onSubmit={onSubmit} className="card relative space-y-4">
+      <FormLoadingOverlay show={submitting} label="体重を保存しています…" />
       <p className="text-sm text-gray-600">体重と体脂肪率を記録できます。</p>
 
       <div>
@@ -94,7 +99,9 @@ export default function WeightForm({ onSaved }: Props) {
       </div>
 
       <button type="submit" disabled={submitting} className="btn-primary">
-        {submitting ? '保存中…' : '体重を保存する'}
+        <ButtonLoadingContent loading={submitting} loadingLabel="保存中…">
+          体重を保存する
+        </ButtonLoadingContent>
       </button>
 
       {message && <p className="text-center text-sm">{message}</p>}

@@ -4,6 +4,10 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { parseApiResponse } from '@/lib/api-client';
 import {
+  ButtonLoadingContent,
+  LoadingBlock,
+} from '@/components/ui/Loading';
+import {
   formatDateJa,
   formatDateTimeJa,
   getJstTodayString,
@@ -155,11 +159,11 @@ export default function AdvicePanel() {
       </section>
 
       <section className="card space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">
+        <h2 className="section-title">
           {formatDateJa(selectedDate)}の食事（分析対象）
         </h2>
         {loadingMeals ? (
-          <p className="text-sm text-gray-500">読み込み中…</p>
+          <LoadingBlock label="食事記録を読み込んでいます…" />
         ) : dayMeals.length === 0 ? (
           <div className="space-y-2 text-sm text-gray-600">
             <p>この日の食事記録がありません。</p>
@@ -171,7 +175,7 @@ export default function AdvicePanel() {
           <>
             <ul className="space-y-2 text-sm">
               {dayMeals.map((meal) => (
-                <li key={meal.id} className="rounded-lg bg-gray-50 px-3 py-2">
+                <li key={meal.id} className="card-nested">
                   <span className="font-medium">{meal.food_name}</span>
                   <span className="ml-2 text-xs text-gray-500">
                     {MEAL_TYPE_LABELS[meal.meal_type]}
@@ -192,7 +196,7 @@ export default function AdvicePanel() {
         )}
       </section>
 
-      <section className="card space-y-3">
+      <section className="card relative space-y-3">
         <p className="text-sm text-gray-600">
           選択した日の食事記録をもとに AI がアドバイスを生成し、自動で保存します。
         </p>
@@ -202,17 +206,22 @@ export default function AdvicePanel() {
           disabled={generating || dayMeals.length === 0}
           className="btn-primary"
         >
-          {generating ? '分析中…' : `${formatDateJa(selectedDate)}のアドバイスを取得`}
+          <ButtonLoadingContent loading={generating} loadingLabel="分析中…">
+            {`${formatDateJa(selectedDate)}のアドバイスを取得`}
+          </ButtonLoadingContent>
         </button>
+        {generating && (
+          <LoadingBlock label="AIがアドバイスを生成しています…" className="py-4" />
+        )}
         {message && <p className="text-sm text-amber-700">{message}</p>}
       </section>
 
       <section className="card space-y-2">
-        <h2 className="text-sm font-semibold text-gray-700">
+        <h2 className="section-title">
           保存済みのアドバイス（{formatDateJa(selectedDate)}）
         </h2>
         {loadingAdvice ? (
-          <p className="text-sm text-gray-500">読み込み中…</p>
+          <LoadingBlock label="アドバイスを読み込んでいます…" />
         ) : savedAdvice ? (
           <>
             <p className="text-xs text-gray-500">
@@ -230,9 +239,9 @@ export default function AdvicePanel() {
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-gray-700">保存したアドバイス一覧</h2>
+        <h2 className="section-title">保存したアドバイス一覧</h2>
         {loadingHistory ? (
-          <p className="text-sm text-gray-500">読み込み中…</p>
+          <LoadingBlock label="履歴を読み込んでいます…" />
         ) : history.length === 0 ? (
           <p className="text-sm text-gray-500">まだアドバイスがありません</p>
         ) : (
@@ -242,7 +251,7 @@ export default function AdvicePanel() {
                 <button
                   type="button"
                   onClick={() => onSelectHistory(item)}
-                  className="card w-full text-left transition active:bg-gray-50"
+                  className="card-interactive w-full text-left"
                 >
                   <p className="mb-1 text-sm font-semibold text-blue-700">
                     {item.advice_date

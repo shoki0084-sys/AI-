@@ -140,7 +140,7 @@ function LoginForm() {
             はじめての方は{' '}
             <button
               type="button"
-              className="font-semibold text-blue-600"
+              className="btn-ghost"
               onClick={() => setMode('register')}
             >
               新規登録
@@ -151,7 +151,7 @@ function LoginForm() {
             すでにアカウントがある方は{' '}
             <button
               type="button"
-              className="font-semibold text-blue-600"
+              className="btn-ghost"
               onClick={() => setMode('login')}
             >
               ログイン

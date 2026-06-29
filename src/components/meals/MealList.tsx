@@ -64,7 +64,7 @@ export default function MealList({ refreshKey = 0 }: Props) {
   return (
     <div className="space-y-4">
       <section className="card space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">本日の記録（日本時間）</h2>
+        <h2 className="section-title">本日の記録（日本時間）</h2>
         {todayMeals.length === 0 ? (
           <p className="text-sm text-gray-500">
             まだ本日の食事がありません。上のフォームから記録してください。
@@ -75,7 +75,7 @@ export default function MealList({ refreshKey = 0 }: Props) {
               {todayMeals.map((meal) => (
                 <li
                   key={meal.id}
-                  className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm"
+                  className="card-nested text-sm"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-medium text-gray-800">{meal.food_name}</span>
@@ -93,7 +93,7 @@ export default function MealList({ refreshKey = 0 }: Props) {
                 </li>
               ))}
             </ul>
-            <div className="rounded-xl bg-blue-50 px-3 py-2 text-sm text-blue-800">
+            <div className="highlight-box">
               <p className="font-semibold">本日の合計</p>
               <p>
                 {Math.round(todayTotals.calories)} kcal · P{Math.round(todayTotals.protein)}g
@@ -105,7 +105,7 @@ export default function MealList({ refreshKey = 0 }: Props) {
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-gray-700">最近の記録</h2>
+        <h2 className="section-title">最近の記録</h2>
         {recentMeals.length === 0 ? (
           <p className="text-sm text-gray-500">保存された記録はまだありません</p>
         ) : (

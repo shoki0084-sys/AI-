@@ -8,8 +8,8 @@ export default function WeightPage() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   return (
-    <main className="space-y-4 p-4">
-      <header className="pt-4">
+    <main className="page-main">
+      <header className="pt-2">
         <h1 className="page-title">体重推移</h1>
       </header>
       <WeightForm onSaved={() => setRefreshKey((k) => k + 1)} />

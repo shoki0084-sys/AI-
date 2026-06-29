@@ -3,6 +3,7 @@
 create table if not exists public.users (
   id uuid primary key references auth.users (id) on delete cascade,
   line_user_id text,
+  target_weight numeric,
   target_calories numeric,
   target_protein numeric,
   target_fat numeric,

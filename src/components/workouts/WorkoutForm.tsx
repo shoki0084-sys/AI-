@@ -2,6 +2,10 @@
 
 import { useState } from 'react';
 import { parseApiResponse } from '@/lib/api-client';
+import {
+  ButtonLoadingContent,
+  FormLoadingOverlay,
+} from '@/components/ui/Loading';
 import type { ExerciseEntry } from '@/types/workout';
 
 type ExerciseRow = ExerciseEntry & { id: string };
@@ -84,7 +88,8 @@ export default function WorkoutForm({ onSaved }: Props) {
   };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="relative space-y-4">
+      <FormLoadingOverlay show={submitting} label="筋トレを保存しています…" />
       <div className="card space-y-4">
         <div>
           <label className="label">日時</label>
@@ -104,7 +109,7 @@ export default function WorkoutForm({ onSaved }: Props) {
           <button
             type="button"
             onClick={addExercise}
-            className="text-sm font-semibold text-blue-600"
+            className="btn-ghost"
           >
             ＋ 種目を追加
           </button>
@@ -118,7 +123,7 @@ export default function WorkoutForm({ onSaved }: Props) {
                 <button
                   type="button"
                   onClick={() => removeExercise(ex.id)}
-                  className="text-xs text-red-600"
+                  className="btn-danger-ghost"
                 >
                   削除
                 </button>
@@ -203,7 +208,9 @@ export default function WorkoutForm({ onSaved }: Props) {
       </div>
 
       <button type="submit" disabled={submitting} className="btn-primary">
-        {submitting ? '保存中…' : '保存する'}
+        <ButtonLoadingContent loading={submitting} loadingLabel="保存中…">
+          保存する
+        </ButtonLoadingContent>
       </button>
 
       {message && <p className="text-center text-sm">{message}</p>}

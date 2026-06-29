@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import { parseApiResponse } from '@/lib/api-client';
 import { calcCaloriesFromPfc } from '@/lib/nutrition';
+import {
+  ButtonLoadingContent,
+  FormLoadingOverlay,
+} from '@/components/ui/Loading';
 import type { FoodItemWithNutrition, MealType } from '@/types/meal';
 
 const MEAL_TYPES: { value: MealType; label: string }[] = [
@@ -169,7 +173,11 @@ export default function MealForm({ onSaved }: Props) {
   };
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="relative space-y-4">
+      <FormLoadingOverlay
+        show={estimating || submitting}
+        label={submitting ? '食事を保存しています…' : 'AIで栄養を計算しています…'}
+      />
       <div className="card space-y-4">
         <div>
           <label className="label">食事区分</label>
@@ -181,11 +189,7 @@ export default function MealForm({ onSaved }: Props) {
                   type="button"
                   key={m.value}
                   onClick={() => setMealType(m.value)}
-                  className={`rounded-xl border px-2 py-2.5 text-sm font-medium transition ${
-                    active
-                      ? 'border-blue-600 bg-blue-50 text-blue-700'
-                      : 'border-gray-300 bg-white text-gray-700'
-                  }`}
+                  className={`btn-segment ${active ? 'btn-segment-active' : ''}`}
                 >
                   {m.label}
                 </button>
@@ -212,7 +216,7 @@ export default function MealForm({ onSaved }: Props) {
           <button
             type="button"
             onClick={addItem}
-            className="text-sm font-semibold text-blue-600"
+            className="btn-ghost"
           >
             ＋ 食材を追加
           </button>
@@ -226,7 +230,7 @@ export default function MealForm({ onSaved }: Props) {
                 <button
                   type="button"
                   onClick={() => removeItem(item.id)}
-                  className="text-xs text-red-600"
+                  className="btn-danger-ghost"
                 >
                   削除
                 </button>
@@ -256,7 +260,7 @@ export default function MealForm({ onSaved }: Props) {
             </div>
 
             {(item.calories > 0 || item.protein > 0) && (
-              <div className="rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
+              <div className="card-nested text-xs text-gray-600">
                 <p className="font-semibold text-blue-600">{item.calories} kcal</p>
                 <p className="mt-1">
                   P {item.protein}g / F {item.fat}g / C {item.carbs}g
@@ -270,10 +274,12 @@ export default function MealForm({ onSaved }: Props) {
       <button
         type="button"
         onClick={onEstimate}
-        disabled={estimating}
-        className="inline-flex w-full items-center justify-center rounded-xl border-2 border-blue-600 bg-white px-4 py-3 text-base font-semibold text-blue-600 disabled:opacity-50"
+        disabled={estimating || submitting}
+        className="btn-outline"
       >
-        {estimating ? 'AI計算中…' : '🤖 AIで栄養を計算'}
+        <ButtonLoadingContent loading={estimating} loadingLabel="AI計算中…" spinnerOnDark={false}>
+          🤖 AIで栄養を計算
+        </ButtonLoadingContent>
       </button>
 
       <div className="card space-y-2">
@@ -287,8 +293,10 @@ export default function MealForm({ onSaved }: Props) {
         </p>
       </div>
 
-      <button type="submit" disabled={submitting} className="btn-primary">
-        {submitting ? '保存中…' : '保存する'}
+      <button type="submit" disabled={submitting || estimating} className="btn-primary">
+        <ButtonLoadingContent loading={submitting} loadingLabel="保存中…">
+          保存する
+        </ButtonLoadingContent>
       </button>
 
       {message && <p className="text-center text-sm">{message}</p>}

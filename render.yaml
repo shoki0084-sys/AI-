@@ -42,3 +42,17 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+
+  - type: cron
+    name: ai-bodymake-daily-reminder
+    runtime: docker
+    schedule: "0 12 * * *"
+    buildCommand: ""
+    startCommand: >
+      curl -fsS -H "Authorization: Bearer $CRON_SECRET"
+      "$APP_URL/api/cron/daily-reminder"
+    envVars:
+      - key: APP_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false

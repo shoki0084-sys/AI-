@@ -93,7 +93,7 @@ export default function WorkoutList({ refreshKey = 0 }: Props) {
 
   return (
     <section className="space-y-4">
-      <h2 className="text-sm font-semibold text-gray-700">記録一覧</h2>
+      <h2 className="section-title">記録一覧</h2>
       {sessionsByDate.map(([day, sessions]) => (
         <div key={day} className="space-y-2">
           <h3 className="text-xs font-semibold text-gray-500">{formatDateJa(day)}</h3>
@@ -111,7 +111,7 @@ export default function WorkoutList({ refreshKey = 0 }: Props) {
                 {session.exercises.map((ex) => (
                   <li
                     key={ex.id}
-                    className="rounded-lg bg-gray-50 px-3 py-2 text-gray-800"
+                    className="card-nested text-gray-800"
                   >
                     <p className="font-medium">{ex.exercise_name}</p>
                     <p className="text-xs text-gray-600">
