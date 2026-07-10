@@ -1,4 +1,16 @@
-$secret = "my-random-secret-12345"
+$secret = $env:CRON_SECRET
+if (-not $secret) {
+  $envFile = Join-Path $PSScriptRoot ".env.local"
+  if (Test-Path $envFile) {
+    Get-Content $envFile | ForEach-Object {
+      if ($_ -match '^\s*CRON_SECRET=(.+)$') { $secret = $matches[1].Trim() }
+    }
+  }
+}
+if (-not $secret) {
+  Write-Error "CRON_SECRET is not set. Set it in .env.local or the environment."
+  exit 1
+}
 
 foreach ($port in @(3000, 3001)) {
   try {

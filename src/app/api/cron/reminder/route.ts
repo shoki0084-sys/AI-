@@ -55,15 +55,5 @@ export async function GET(req: Request) {
     failed,
     eligible: targets.length,
     errors: errors.length > 0 ? errors : undefined,
-    totalUsers: allUsers?.length ?? 0,
-    hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-    hint:
-      targets.length === 0
-        ? 'line_user_id が登録されたユーザーが0人です。Supabaseの users 表と .env.local の SUPABASE_SERVICE_ROLE_KEY（同一プロジェクト）を確認し、npm run dev を再起動してください。'
-        : sent === 0 && failed > 0
-          ? 'LINE送信に失敗しました。errors を確認し、公式アカウントを友だち追加しているか確認してください。'
-          : sent > 0
-            ? '送信成功。LINEアプリのトーク一覧で公式アカウントを開いてください（curlには返信はありません）。'
-            : undefined,
   });
 }

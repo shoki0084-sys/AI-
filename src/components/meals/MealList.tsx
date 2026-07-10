@@ -22,9 +22,35 @@ function sumMeals(meals: Meal[]) {
   );
 }
 
+type ProfileTargets = {
+  target_calories: number | null;
+  target_protein: number | null;
+  target_fat: number | null;
+  target_carbs: number | null;
+};
+
+function round1(n: number) {
+  return Math.round(n * 10) / 10;
+}
+
+function formatRemaining(current: number, target: number | null, unit: string) {
+  if (target == null || target <= 0) return '—';
+  const diff = round1(target - current);
+  if (diff < 0) return `超過 ${Math.abs(diff)}${unit}`;
+  return `${diff}${unit}`;
+}
+
+const PFC_ROWS = [
+  { key: 'calories' as const, label: 'カロリー', unit: 'kcal', targetKey: 'target_calories' as const },
+  { key: 'protein' as const, label: 'タンパク質', unit: 'g', targetKey: 'target_protein' as const },
+  { key: 'fat' as const, label: '脂質', unit: 'g', targetKey: 'target_fat' as const },
+  { key: 'carbs' as const, label: '炭水化物', unit: 'g', targetKey: 'target_carbs' as const },
+];
+
 export default function MealList({ refreshKey = 0 }: Props) {
   const [todayMeals, setTodayMeals] = useState<Meal[]>([]);
   const [recentMeals, setRecentMeals] = useState<Meal[]>([]);
+  const [targets, setTargets] = useState<ProfileTargets | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,14 +58,17 @@ export default function MealList({ refreshKey = 0 }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const [todayRes, allRes] = await Promise.all([
+      const [todayRes, allRes, profileRes] = await Promise.all([
         fetch('/api/meals?scope=today'),
         fetch('/api/meals'),
+        fetch('/api/profile'),
       ]);
       const todayData = await parseApiResponse<{ meals: Meal[] }>(todayRes);
       const allData = await parseApiResponse<{ meals: Meal[] }>(allRes);
+      const profileData = await parseApiResponse<{ profile: ProfileTargets | null }>(profileRes);
       setTodayMeals(todayData.meals ?? []);
       setRecentMeals((allData.meals ?? []).slice(0, 30));
+      setTargets(profileData.profile);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -63,6 +92,39 @@ export default function MealList({ refreshKey = 0 }: Props) {
 
   return (
     <div className="space-y-4">
+      <section className="card space-y-3">
+        <h2 className="section-title">本日のPFC（日本時間）</h2>
+        <div className="space-y-2">
+          {PFC_ROWS.map((row) => {
+            const current = round1(todayTotals[row.key]);
+            const target = targets?.[row.targetKey] ?? null;
+            return (
+              <div key={row.key} className="card-nested grid grid-cols-3 gap-2 text-center text-xs">
+                <div>
+                  <p className="stat-label">現在</p>
+                  <p className="mt-0.5 font-semibold text-gray-800">
+                    {current}
+                    {row.unit}
+                  </p>
+                </div>
+                <div>
+                  <p className="stat-label">目標</p>
+                  <p className="mt-0.5 font-semibold text-gray-800">
+                    {target != null ? `${target}${row.unit}` : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="stat-label">残り</p>
+                  <p className="mt-0.5 font-semibold text-gray-800">
+                    {formatRemaining(current, target, row.unit)}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
       <section className="card space-y-3">
         <h2 className="section-title">本日の記録（日本時間）</h2>
         {todayMeals.length === 0 ? (

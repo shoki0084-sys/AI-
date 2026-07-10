@@ -28,6 +28,8 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+      - key: ADMIN_EMAILS
+        sync: false
 
   - type: cron
     name: ai-bodymake-reminder
@@ -51,6 +53,48 @@ services:
     startCommand: >
       curl -fsS -H "Authorization: Bearer $CRON_SECRET"
       "$APP_URL/api/cron/daily-reminder"
+    envVars:
+      - key: APP_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+
+  - type: cron
+    name: ai-bodymake-trainer-follow-reminder
+    runtime: docker
+    schedule: "0 12 * * *"
+    buildCommand: ""
+    startCommand: >
+      curl -fsS -H "Authorization: Bearer $CRON_SECRET"
+      "$APP_URL/api/cron/trainer-follow?type=reminder"
+    envVars:
+      - key: APP_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+
+  - type: cron
+    name: ai-bodymake-trainer-follow-no-input
+    runtime: docker
+    schedule: "0 1 * * *"
+    buildCommand: ""
+    startCommand: >
+      curl -fsS -H "Authorization: Bearer $CRON_SECRET"
+      "$APP_URL/api/cron/trainer-follow?type=no-input"
+    envVars:
+      - key: APP_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+
+  - type: cron
+    name: ai-bodymake-trainer-follow-stalled
+    runtime: docker
+    schedule: "0 0 * * 1"
+    buildCommand: ""
+    startCommand: >
+      curl -fsS -H "Authorization: Bearer $CRON_SECRET"
+      "$APP_URL/api/cron/trainer-follow?type=stalled"
     envVars:
       - key: APP_URL
         sync: false

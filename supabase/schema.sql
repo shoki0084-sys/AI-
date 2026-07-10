@@ -98,3 +98,39 @@ create policy "workouts_all_own" on public.workouts for all using (auth.uid() = 
 create policy "weight_logs_all_own" on public.weight_logs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "advices_all_own" on public.advices for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "notifications_select_own" on public.notifications for select using (auth.uid() = user_id);
+
+-- トレーナー向け顧客管理: trainer と既存 users を紐付ける
+create table if not exists public.clients (
+  id uuid primary key default gen_random_uuid(),
+  trainer_id uuid not null references public.users (id) on delete cascade,
+  user_id uuid not null references public.users (id) on delete cascade,
+  display_name text,
+  created_at timestamptz not null default now(),
+  unique (trainer_id, user_id)
+);
+
+alter table public.clients enable row level security;
+
+create policy "clients_owner" on public.clients
+  for all using (auth.uid() = trainer_id) with check (auth.uid() = trainer_id);
+
+-- AIコーチ分析結果の保存
+create table if not exists public.coach_analyses (
+  id uuid primary key default gen_random_uuid(),
+  trainer_id uuid not null references public.users (id) on delete cascade,
+  client_id uuid not null references public.clients (id) on delete cascade,
+  user_id uuid not null references public.users (id) on delete cascade,
+  avg_weight numeric,
+  avg_calories numeric,
+  avg_protein numeric,
+  avg_fat numeric,
+  avg_carbs numeric,
+  workout_days integer not null default 0,
+  analysis text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.coach_analyses enable row level security;
+
+create policy "coach_analyses_owner" on public.coach_analyses
+  for all using (auth.uid() = trainer_id) with check (auth.uid() = trainer_id);

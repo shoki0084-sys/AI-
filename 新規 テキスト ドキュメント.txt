@@ -1,1 +1,1 @@
-curl.exe -H "Authorization: Bearer my-random-secret-12345" http://localhost:3000/api/cron/reminder
+curl.exe -H "Authorization: Bearer %CRON_SECRET%" http://localhost:3000/api/cron/reminder

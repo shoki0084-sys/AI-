@@ -10,13 +10,15 @@ import {
 export const runtime = 'nodejs';
 
 const SYSTEM_PROMPT = `あなたはボディメイクに精通した管理栄養士兼パーソナルトレーナーです。
-ユーザーの食事記録を分析し、以下の3つの観点で日本語で簡潔にアドバイスしてください。
+ユーザーの1日の食事・体重・筋トレ記録を分析し、以下の4観点で日本語で簡潔にアドバイスしてください。
 
-1. 食事内容の分析（栄養素の偏り、食材の質）
-2. PFCバランスの評価（目標値との差分）
-3. 具体的な改善提案（次の食事や明日への提案を2〜3個）
+1. 食事評価（栄養素の偏り、PFCバランス、目標との差）
+2. 体重評価（その日の体重・推移・目標体重との関係）
+3. トレーニング評価（実施内容・ボリューム・継続性）
+4. 明日の改善提案（具体的なアクションを2〜3個）
 
-出力は Markdown 見出し (## 食事内容分析 / ## PFCバランス / ## 改善提案) で構造化してください。`;
+記録がない項目は「記録なし」と明記し、他の項目は可能な範囲で評価してください。
+出力は Markdown 見出し (## 食事評価 / ## 体重評価 / ## トレーニング評価 / ## 明日の改善提案) で構造化してください。`;
 
 function resolveAdviceDate(body?: { date?: string }) {
   const raw = body?.date?.trim();
@@ -49,25 +51,49 @@ export async function POST(req: Request) {
 
   const { data: profile } = await supabase!
     .from('users')
-    .select('target_calories, target_protein, target_fat, target_carbs')
+    .select('target_weight, target_calories, target_protein, target_fat, target_carbs')
     .eq('id', user!.id)
     .single();
 
-  const { data: meals, error: mealsError } = await supabase!
-    .from('meals')
-    .select('meal_type, food_name, calories, protein, fat, carbs, eaten_at')
-    .eq('user_id', user!.id)
-    .gte('eaten_at', start)
-    .lte('eaten_at', end)
-    .order('eaten_at', { ascending: true });
+  const [mealsRes, weightsRes, workoutsRes] = await Promise.all([
+    supabase!
+      .from('meals')
+      .select('meal_type, food_name, calories, protein, fat, carbs, eaten_at')
+      .eq('user_id', user!.id)
+      .gte('eaten_at', start)
+      .lte('eaten_at', end)
+      .order('eaten_at', { ascending: true }),
+    supabase!
+      .from('weight_logs')
+      .select('weight_kg, body_fat, measured_at')
+      .eq('user_id', user!.id)
+      .gte('measured_at', start)
+      .lte('measured_at', end)
+      .order('measured_at', { ascending: true }),
+    supabase!
+      .from('workouts')
+      .select('exercise_name, weight_kg, reps, sets, performed_at')
+      .eq('user_id', user!.id)
+      .gte('performed_at', start)
+      .lte('performed_at', end)
+      .order('performed_at', { ascending: true }),
+  ]);
 
-  if (mealsError)
-    return NextResponse.json({ error: mealsError.message }, { status: 500 });
+  if (mealsRes.error)
+    return NextResponse.json({ error: mealsRes.error.message }, { status: 500 });
+  if (weightsRes.error)
+    return NextResponse.json({ error: weightsRes.error.message }, { status: 500 });
+  if (workoutsRes.error)
+    return NextResponse.json({ error: workoutsRes.error.message }, { status: 500 });
 
-  if (!meals || meals.length === 0) {
+  const meals = mealsRes.data ?? [];
+  const weights = weightsRes.data ?? [];
+  const workouts = workoutsRes.data ?? [];
+
+  if (meals.length === 0 && weights.length === 0 && workouts.length === 0) {
     return NextResponse.json(
       {
-        error: `${formatDateJa(adviceDate)}の食事記録がありません。食事タブで記録してからお試しください。`,
+        error: `${formatDateJa(adviceDate)}の食事・体重・筋トレの記録がありません。記録してからお試しください。`,
       },
       { status: 400 }
     );
@@ -84,21 +110,51 @@ export async function POST(req: Request) {
   );
 
   const dateLabel = formatDateJa(adviceDate);
-  const userPrompt = `【${dateLabel}の食事記録】
-${meals
-  .map(
-    (m) =>
-      `- [${m.meal_type}] ${m.food_name} (${m.calories}kcal / P${m.protein}g F${m.fat}g C${m.carbs}g)`
-  )
-  .join('\n')}
 
-【合計】
-カロリー: ${totals.calories} kcal / P: ${totals.protein}g / F: ${totals.fat}g / C: ${totals.carbs}g
+  const mealSection =
+    meals.length > 0
+      ? `${meals
+          .map(
+            (m) =>
+              `- [${m.meal_type}] ${m.food_name} (${m.calories}kcal / P${m.protein}g F${m.fat}g C${m.carbs}g)`
+          )
+          .join('\n')}\n合計: ${totals.calories} kcal / P: ${totals.protein}g / F: ${totals.fat}g / C: ${totals.carbs}g`
+      : '記録なし';
 
-【目標値】
-カロリー: ${profile?.target_calories ?? '未設定'} kcal / P: ${profile?.target_protein ?? '未設定'}g / F: ${profile?.target_fat ?? '未設定'}g / C: ${profile?.target_carbs ?? '未設定'}g
+  const weightSection =
+    weights.length > 0
+      ? weights
+          .map((w) => {
+            const bf = w.body_fat != null ? ` / 体脂肪${w.body_fat}%` : '';
+            return `- ${w.weight_kg}kg${bf}（${w.measured_at}）`;
+          })
+          .join('\n')
+      : '記録なし';
 
-上記を分析し、アドバイスをお願いします。`;
+  const workoutSection =
+    workouts.length > 0
+      ? workouts
+          .map(
+            (w) =>
+              `- ${w.exercise_name}: ${w.weight_kg}kg × ${w.reps}回 × ${w.sets}セット`
+          )
+          .join('\n')
+      : '記録なし';
+
+  const userPrompt = `【${dateLabel}の記録】
+
+■食事
+${mealSection}
+目標(1日): ${profile?.target_calories ?? '未設定'}kcal / P${profile?.target_protein ?? '未設定'}g F${profile?.target_fat ?? '未設定'}g C${profile?.target_carbs ?? '未設定'}g
+
+■体重
+${weightSection}
+目標体重: ${profile?.target_weight ?? '未設定'}kg
+
+■筋トレ
+${workoutSection}
+
+上記を分析し、4観点（食事評価・体重評価・トレーニング評価・明日の改善提案）でアドバイスをお願いします。`;
 
   let advice: string;
   try {

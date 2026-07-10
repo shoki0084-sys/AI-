@@ -7,6 +7,18 @@
     {
       "path": "/api/cron/daily-reminder",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/trainer-follow?type=reminder",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/trainer-follow?type=no-input",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/trainer-follow?type=stalled",
+      "schedule": "0 0 * * 1"
     }
   ]
 }
