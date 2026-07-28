@@ -7,6 +7,7 @@ import ClientPfcChart from './ClientPfcChart';
 import ClientWorkoutHistory from './ClientWorkoutHistory';
 import CoachAnalysis from './CoachAnalysis';
 import WeeklyReport from './WeeklyReport';
+import TrainerMemos from './TrainerMemos';
 
 type Detail = {
   client: { id: string; user_id: string; display_name: string | null; email: string | null };
@@ -107,6 +108,8 @@ export default function ClientDetail({ clientId }: { clientId: string }) {
       <SectionCard title="筋トレ履歴" icon="🏋️">
         <ClientWorkoutHistory workouts={data.workouts} />
       </SectionCard>
+
+      <TrainerMemos clientId={clientId} />
 
       <CoachAnalysis clientId={clientId} />
 

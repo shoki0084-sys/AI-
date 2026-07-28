@@ -5,12 +5,13 @@ import {
   formatDateJa,
   getJstDayBoundsFromString,
   getJstTodayString,
+  toJstDateString,
 } from '@/lib/datetime';
 
 export const runtime = 'nodejs';
 
 const SYSTEM_PROMPT = `あなたはボディメイクに精通した管理栄養士兼パーソナルトレーナーです。
-ユーザーの1日の食事・体重・筋トレ記録を分析し、以下の4観点で日本語で簡潔にアドバイスしてください。
+ユーザーの1日の食事・体重・筋トレ記録と、その日の主観コメント（体調・睡眠・空腹感・自由コメント）を分析し、以下の4観点で日本語で簡潔にアドバイスしてください。
 
 1. 食事評価（栄養素の偏り、PFCバランス、目標との差）
 2. 体重評価（その日の体重・推移・目標体重との関係）
@@ -18,6 +19,14 @@ const SYSTEM_PROMPT = `あなたはボディメイクに精通した管理栄養
 4. 明日の改善提案（具体的なアクションを2〜3個）
 
 記録がない項目は「記録なし」と明記し、他の項目は可能な範囲で評価してください。
+主観コメントがある場合は、外食・飲み会・睡眠不足などの文脈も踏まえて提案に反映してください。
+
+【体重評価の厳守ルール】
+- 目標体重が現在体重より高い → 増量が目的。体重減少は目標から遠ざかっていると評価する。
+- 目標体重が現在体重より低い → 減量が目的。体重増加は目標から遠ざかっていると評価する。
+- 「目標に近づいている」は、実際に目標との差が縮んでいる場合のみ使う。
+- 増量・減量の用語を取り違えない。
+
 出力は Markdown 見出し (## 食事評価 / ## 体重評価 / ## トレーニング評価 / ## 明日の改善提案) で構造化してください。`;
 
 function resolveAdviceDate(body?: { date?: string }) {
@@ -48,6 +57,9 @@ export async function POST(req: Request) {
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const { start, end } = getJstDayBoundsFromString(adviceDate);
+  const padMs = 12 * 60 * 60 * 1000;
+  const startPad = new Date(new Date(start).getTime() - padMs).toISOString();
+  const endPad = new Date(new Date(end).getTime() + padMs).toISOString();
 
   const { data: profile } = await supabase!
     .from('users')
@@ -55,29 +67,46 @@ export async function POST(req: Request) {
     .eq('id', user!.id)
     .single();
 
-  const [mealsRes, weightsRes, workoutsRes] = await Promise.all([
+  const [mealsRes, weightsRes, workoutsRes, commentRes] = await Promise.all([
     supabase!
       .from('meals')
       .select('meal_type, food_name, calories, protein, fat, carbs, eaten_at')
       .eq('user_id', user!.id)
-      .gte('eaten_at', start)
-      .lte('eaten_at', end)
+      .gte('eaten_at', startPad)
+      .lte('eaten_at', endPad)
       .order('eaten_at', { ascending: true }),
     supabase!
       .from('weight_logs')
       .select('weight_kg, body_fat, measured_at')
       .eq('user_id', user!.id)
-      .gte('measured_at', start)
-      .lte('measured_at', end)
+      .gte('measured_at', startPad)
+      .lte('measured_at', endPad)
       .order('measured_at', { ascending: true }),
     supabase!
       .from('workouts')
       .select('exercise_name, weight_kg, reps, sets, performed_at')
       .eq('user_id', user!.id)
-      .gte('performed_at', start)
-      .lte('performed_at', end)
+      .gte('performed_at', startPad)
+      .lte('performed_at', endPad)
       .order('performed_at', { ascending: true }),
+    supabase!
+      .from('daily_comments')
+      .select('condition, sleep_hours, hunger, free_comment, comment_date')
+      .eq('user_id', user!.id)
+      .eq('comment_date', adviceDate)
+      .maybeSingle(),
   ]);
+
+  const meals = (mealsRes.data ?? []).filter(
+    (m) => toJstDateString(m.eaten_at) === adviceDate
+  );
+  const weights = (weightsRes.data ?? []).filter(
+    (w) => toJstDateString(w.measured_at) === adviceDate
+  );
+  const workouts = (workoutsRes.data ?? []).filter(
+    (w) => toJstDateString(w.performed_at) === adviceDate
+  );
+  const dailyComment = commentRes.data;
 
   if (mealsRes.error)
     return NextResponse.json({ error: mealsRes.error.message }, { status: 500 });
@@ -85,15 +114,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: weightsRes.error.message }, { status: 500 });
   if (workoutsRes.error)
     return NextResponse.json({ error: workoutsRes.error.message }, { status: 500 });
+  if (commentRes.error)
+    return NextResponse.json({ error: commentRes.error.message }, { status: 500 });
 
-  const meals = mealsRes.data ?? [];
-  const weights = weightsRes.data ?? [];
-  const workouts = workoutsRes.data ?? [];
-
-  if (meals.length === 0 && weights.length === 0 && workouts.length === 0) {
+  if (
+    meals.length === 0 &&
+    weights.length === 0 &&
+    workouts.length === 0 &&
+    !dailyComment
+  ) {
     return NextResponse.json(
       {
-        error: `${formatDateJa(adviceDate)}の食事・体重・筋トレの記録がありません。記録してからお試しください。`,
+        error: `${formatDateJa(adviceDate)}の食事・体重・筋トレ・コメントの記録がありません。記録してからお試しください。`,
       },
       { status: 400 }
     );
@@ -131,6 +163,18 @@ export async function POST(req: Request) {
           .join('\n')
       : '記録なし';
 
+  const latestWeightKg =
+    weights.length > 0 ? Number(weights[weights.length - 1].weight_kg) : null;
+  const targetWeightKg =
+    profile?.target_weight != null ? Number(profile.target_weight) : null;
+  let goalDirection = '未設定';
+  if (latestWeightKg != null && targetWeightKg != null) {
+    const gap = targetWeightKg - latestWeightKg;
+    if (Math.abs(gap) < 0.1) goalDirection = '維持';
+    else if (gap > 0) goalDirection = '増量';
+    else goalDirection = '減量';
+  }
+
   const workoutSection =
     workouts.length > 0
       ? workouts
@@ -141,6 +185,15 @@ export async function POST(req: Request) {
           .join('\n')
       : '記録なし';
 
+  const commentSection = dailyComment
+    ? [
+        `- 体調: ${dailyComment.condition ?? '未記入'}`,
+        `- 睡眠時間: ${dailyComment.sleep_hours != null ? `${dailyComment.sleep_hours}時間` : '未記入'}`,
+        `- 空腹感: ${dailyComment.hunger ?? '未記入'}`,
+        `- 自由コメント: ${dailyComment.free_comment ?? '未記入'}`,
+      ].join('\n')
+    : '記録なし';
+
   const userPrompt = `【${dateLabel}の記録】
 
 ■食事
@@ -150,11 +203,15 @@ ${mealSection}
 ■体重
 ${weightSection}
 目標体重: ${profile?.target_weight ?? '未設定'}kg
+目的: ${goalDirection}
 
 ■筋トレ
 ${workoutSection}
 
-上記を分析し、4観点（食事評価・体重評価・トレーニング評価・明日の改善提案）でアドバイスをお願いします。`;
+■その日のコメント
+${commentSection}
+
+上記を分析し、4観点（食事評価・体重評価・トレーニング評価・明日の改善提案）でアドバイスをお願いします。目的（${goalDirection}）を取り違えないでください。`;
 
   let advice: string;
   try {

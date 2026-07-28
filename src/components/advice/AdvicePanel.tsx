@@ -11,6 +11,7 @@ import {
   formatDateJa,
   formatDateTimeJa,
   getJstTodayString,
+  toJstDateString,
 } from '@/lib/datetime';
 import { MEAL_TYPE_LABELS } from '@/lib/meal-labels';
 import type { Meal } from '@/types/meal';
@@ -35,6 +36,7 @@ function formatSavedAt(iso: string) {
 export default function AdvicePanel() {
   const [selectedDate, setSelectedDate] = useState(getJstTodayString);
   const [dayMeals, setDayMeals] = useState<Meal[]>([]);
+  const [recordDates, setRecordDates] = useState<string[]>([]);
   const [savedAdvice, setSavedAdvice] = useState<AdviceRecord | null>(null);
   const [history, setHistory] = useState<AdviceRecord[]>([]);
   const [loadingMeals, setLoadingMeals] = useState(true);
@@ -46,13 +48,29 @@ export default function AdvicePanel() {
   const loadDayMeals = useCallback(async (date: string) => {
     setLoadingMeals(true);
     try {
-      const res = await fetch(`/api/meals?date=${date}`);
+      const res = await fetch(`/api/meals?date=${encodeURIComponent(date)}`);
       const data = await parseApiResponse<{ meals: Meal[] }>(res);
       setDayMeals(data.meals ?? []);
-    } catch {
+    } catch (err) {
       setDayMeals([]);
+      setMessage(`⚠️ ${(err as Error).message}`);
     } finally {
       setLoadingMeals(false);
+    }
+  }, []);
+
+  const loadRecordDates = useCallback(async () => {
+    try {
+      const res = await fetch('/api/meals');
+      const data = await parseApiResponse<{ meals: Meal[] }>(res);
+      const dates = [
+        ...new Set(
+          (data.meals ?? []).map((m) => toJstDateString(m.eaten_at)).filter(Boolean)
+        ),
+      ].slice(0, 14);
+      setRecordDates(dates);
+    } catch {
+      setRecordDates([]);
     }
   }, []);
 
@@ -89,7 +107,8 @@ export default function AdvicePanel() {
 
   useEffect(() => {
     loadHistory();
-  }, [loadHistory]);
+    loadRecordDates();
+  }, [loadHistory, loadRecordDates]);
 
   const dayTotals = dayMeals.reduce(
     (acc, m) => ({
@@ -126,6 +145,7 @@ export default function AdvicePanel() {
       );
       await loadSavedAdvice(selectedDate);
       await loadHistory();
+      await loadRecordDates();
       setMessage('✅ アドバイスを生成して保存しました');
     } catch (err) {
       setMessage(`⚠️ ${(err as Error).message}`);
@@ -155,6 +175,20 @@ export default function AdvicePanel() {
           <p className="mt-1 text-xs text-gray-500">
             選択中: {formatDateJa(selectedDate)}（日本時間）
           </p>
+          {recordDates.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {recordDates.slice(0, 7).map((d) => (
+                <button
+                  key={`pick-${d}`}
+                  type="button"
+                  onClick={() => setSelectedDate(d)}
+                  className={`chip ${selectedDate === d ? 'chip-active' : ''}`}
+                >
+                  {d.slice(5).replace('-', '/')}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -165,9 +199,28 @@ export default function AdvicePanel() {
         {loadingMeals ? (
           <LoadingBlock label="食事記録を読み込んでいます…" />
         ) : dayMeals.length === 0 ? (
-          <div className="space-y-2 text-sm text-gray-600">
+          <div className="space-y-3 text-sm text-gray-600">
             <p>この日の食事記録がありません。</p>
-            <Link href="/meals" className="font-semibold text-blue-600">
+            {recordDates.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-gray-500">
+                  記録がある日を選ぶ
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {recordDates.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setSelectedDate(d)}
+                      className={`chip ${selectedDate === d ? 'chip-active' : ''}`}
+                    >
+                      {formatDateJa(d)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <Link href="/meals" className="inline-block font-semibold text-blue-600">
               食事タブで記録する →
             </Link>
           </div>

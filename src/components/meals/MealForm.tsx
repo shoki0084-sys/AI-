@@ -1,7 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { parseApiResponse } from '@/lib/api-client';
+import { datetimeLocalToIso, toDatetimeLocalValue } from '@/lib/datetime';
+import { COMMON_FOODS } from '@/lib/foods/common-foods';
+import { getFrequentFoods, rememberFoods } from '@/lib/foods/frequent-foods';
+import { nutritionForAmountChange } from '@/lib/foods/reference-nutrition';
+import { MEAL_TYPE_LABELS } from '@/lib/meal-labels';
 import { calcCaloriesFromPfc } from '@/lib/nutrition';
 import {
   ButtonLoadingContent,
@@ -9,20 +14,13 @@ import {
 } from '@/components/ui/Loading';
 import type { FoodItemWithNutrition, MealType } from '@/types/meal';
 
-const MEAL_TYPES: { value: MealType; label: string }[] = [
-  { value: 'breakfast', label: '朝食' },
-  { value: 'lunch', label: '昼食' },
-  { value: 'dinner', label: '夕食' },
-  { value: 'snack', label: '間食' },
-];
-
 type FoodRow = FoodItemWithNutrition & { id: string };
 
-function newFoodRow(): FoodRow {
+function newFoodRow(preset?: { name?: string; amount?: string }): FoodRow {
   return {
     id: crypto.randomUUID(),
-    name: '',
-    amount: '',
+    name: preset?.name ?? '',
+    amount: preset?.amount ?? '',
     calories: 0,
     protein: 0,
     fat: 0,
@@ -31,16 +29,26 @@ function newFoodRow(): FoodRow {
 }
 
 type Props = {
+  mealType: MealType;
   onSaved?: () => void;
 };
 
-export default function MealForm({ onSaved }: Props) {
-  const [mealType, setMealType] = useState<MealType>('breakfast');
-  const [eatenAt, setEatenAt] = useState(new Date().toISOString().slice(0, 16));
+export default function MealForm({ mealType, onSaved }: Props) {
+  const [eatenAt, setEatenAt] = useState(() => toDatetimeLocalValue());
   const [items, setItems] = useState<FoodRow[]>([newFoodRow()]);
+  const [frequent, setFrequent] = useState<{ name: string; amount: string }[]>([]);
   const [estimating, setEstimating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
+  const [flashChipKey, setFlashChipKey] = useState<string | null>(null);
+  const [addBump, setAddBump] = useState(false);
+  /** 量フィールドにフォーカスした時点の分量（比例換算の基準） */
+  const amountAtFocusRef = useRef<Record<string, string>>({});
+
+  useEffect(() => {
+    setFrequent(getFrequentFoods(8));
+  }, []);
 
   const updateItem = (id: string, patch: Partial<FoodRow>) => {
     setItems((prev) =>
@@ -55,7 +63,83 @@ export default function MealForm({ onSaved }: Props) {
     );
   };
 
-  const addItem = () => setItems((prev) => [...prev, newFoodRow()]);
+  /** 量の入力確定時にカロリー・PFCを連動させる */
+  const applyAmountNutrition = (id: string, previousAmount: string, nextAmount: string) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const scaled = nutritionForAmountChange({
+          name: item.name,
+          previousAmount,
+          nextAmount,
+          previous: {
+            calories: item.calories,
+            protein: item.protein,
+            fat: item.fat,
+            carbs: item.carbs,
+          },
+        });
+        if (!scaled) {
+          return { ...item, amount: nextAmount };
+        }
+        return {
+          ...item,
+          amount: nextAmount,
+          calories: scaled.calories,
+          protein: scaled.protein,
+          fat: scaled.fat,
+          carbs: scaled.carbs,
+        };
+      })
+    );
+  };
+
+  const flashChip = (key: string) => {
+    setFlashChipKey(key);
+    window.setTimeout(() => {
+      setFlashChipKey((current) => (current === key ? null : current));
+    }, 450);
+  };
+
+  const markJustAdded = (id: string) => {
+    setJustAddedId(id);
+    window.setTimeout(() => {
+      setJustAddedId((current) => (current === id ? null : current));
+    }, 400);
+  };
+
+  const bumpAddButton = () => {
+    setAddBump(true);
+    window.setTimeout(() => setAddBump(false), 250);
+  };
+
+  const addItem = (preset?: { name: string; amount: string }, chipKey?: string) => {
+    if (chipKey) flashChip(chipKey);
+    else bumpAddButton();
+
+    setItems((prev) => {
+      const empty = prev.find((item) => !item.name.trim());
+      if (empty && preset) {
+        queueMicrotask(() => markJustAdded(empty.id));
+        return prev.map((item) =>
+          item.id === empty.id
+            ? {
+                ...item,
+                name: preset.name,
+                amount: preset.amount,
+                calories: 0,
+                protein: 0,
+                fat: 0,
+                carbs: 0,
+              }
+            : item
+        );
+      }
+      const next = newFoodRow(preset);
+      queueMicrotask(() => markJustAdded(next.id));
+      return [...prev, next];
+    });
+  };
 
   const removeItem = (id: string) => {
     setItems((prev) => (prev.length <= 1 ? prev : prev.filter((item) => item.id !== id)));
@@ -150,7 +234,7 @@ export default function MealForm({ onSaved }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           meal_type: mealType,
-          eaten_at: new Date(eatenAt).toISOString(),
+          eaten_at: datetimeLocalToIso(eatenAt),
           items: validItems.map(({ name, amount, calories, protein, fat, carbs }) => ({
             name,
             amount,
@@ -162,7 +246,9 @@ export default function MealForm({ onSaved }: Props) {
         }),
       });
       await parseApiResponse(res);
-      setMessage(`✅ ${validItems.length}件の食事を保存しました`);
+      rememberFoods(validItems.map(({ name, amount }) => ({ name, amount })));
+      setFrequent(getFrequentFoods(8));
+      setMessage(`✅ ${MEAL_TYPE_LABELS[mealType]}を${validItems.length}件保存しました`);
       setItems([newFoodRow()]);
       onSaved?.();
     } catch (err) {
@@ -180,26 +266,7 @@ export default function MealForm({ onSaved }: Props) {
       />
       <div className="card space-y-4">
         <div>
-          <label className="label">食事区分</label>
-          <div className="grid grid-cols-4 gap-2">
-            {MEAL_TYPES.map((m) => {
-              const active = mealType === m.value;
-              return (
-                <button
-                  type="button"
-                  key={m.value}
-                  onClick={() => setMealType(m.value)}
-                  className={`btn-segment ${active ? 'btn-segment-active' : ''}`}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div>
-          <label className="label">日時</label>
+          <label className="label">日時（{MEAL_TYPE_LABELS[mealType]}）</label>
           <input
             type="datetime-local"
             required
@@ -212,18 +279,64 @@ export default function MealForm({ onSaved }: Props) {
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-gray-700">食材</p>
+          <p className="text-sm font-semibold text-gray-700">
+            {MEAL_TYPE_LABELS[mealType]}の食材
+          </p>
           <button
             type="button"
-            onClick={addItem}
-            className="btn-ghost"
+            onClick={() => addItem()}
+            className={`btn-ghost ${addBump ? 'animate-tap-pop' : ''}`}
           >
             ＋ 食材を追加
           </button>
         </div>
 
+        {frequent.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-gray-500">よく使うもの</p>
+            <div className="flex flex-wrap gap-1.5">
+              {frequent.map((food) => {
+                const key = `freq-${food.name}-${food.amount}`;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => addItem(food, key)}
+                    className={`chip ${flashChipKey === key ? 'chip-flash' : ''}`}
+                  >
+                    {food.name}
+                    {food.amount ? ` (${food.amount})` : ''}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-gray-500">定番食材</p>
+          <div className="flex flex-wrap gap-1.5">
+            {COMMON_FOODS.map((food) => {
+              const key = `common-${food.name}`;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => addItem(food, key)}
+                  className={`chip ${flashChipKey === key ? 'chip-flash' : ''}`}
+                >
+                  {food.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {items.map((item, index) => (
-          <div key={item.id} className="card space-y-3">
+          <div
+            key={item.id}
+            className={`card space-y-3 ${justAddedId === item.id ? 'row-enter ring-2 ring-blue-200' : ''}`}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-gray-500">食材 {index + 1}</span>
               {items.length > 1 && (
@@ -245,6 +358,7 @@ export default function MealForm({ onSaved }: Props) {
                 onChange={(e) => updateItem(item.id, { name: e.target.value })}
                 className="field"
                 placeholder="鶏むね肉"
+                list="common-food-suggestions"
               />
             </div>
 
@@ -254,9 +368,22 @@ export default function MealForm({ onSaved }: Props) {
                 type="text"
                 value={item.amount}
                 onChange={(e) => updateItem(item.id, { amount: e.target.value })}
+                onFocus={() => {
+                  amountAtFocusRef.current[item.id] = item.amount;
+                }}
+                onBlur={(e) =>
+                  applyAmountNutrition(
+                    item.id,
+                    amountAtFocusRef.current[item.id] ?? item.amount,
+                    e.target.value
+                  )
+                }
                 className="field"
-                placeholder="100g、1杯、1個 など"
+                placeholder="例: 100g、1/2スクープ、半分"
               />
+              <p className="mt-1 text-xs text-gray-400">
+                半分なら「1/2スクープ」や「0.5スクープ」。入力後に枠外をタップするとカロリー・PFCが連動します
+              </p>
             </div>
 
             {(item.calories > 0 || item.protein > 0) && (
@@ -269,6 +396,15 @@ export default function MealForm({ onSaved }: Props) {
             )}
           </div>
         ))}
+
+        <datalist id="common-food-suggestions">
+          {COMMON_FOODS.map((food) => (
+            <option key={food.name} value={food.name} />
+          ))}
+          {frequent.map((food) => (
+            <option key={`opt-${food.name}`} value={food.name} />
+          ))}
+        </datalist>
       </div>
 
       <button
@@ -283,7 +419,9 @@ export default function MealForm({ onSaved }: Props) {
       </button>
 
       <div className="card space-y-2">
-        <p className="text-sm font-semibold text-gray-700">合計（全食材）</p>
+        <p className="text-sm font-semibold text-gray-700">
+          {MEAL_TYPE_LABELS[mealType]}の合計
+        </p>
         <div className="flex items-center justify-between">
           <span className="text-gray-600">カロリー</span>
           <span className="text-lg font-bold text-blue-600">{roundedTotals.calories} kcal</span>
@@ -295,7 +433,7 @@ export default function MealForm({ onSaved }: Props) {
 
       <button type="submit" disabled={submitting || estimating} className="btn-primary">
         <ButtonLoadingContent loading={submitting} loadingLabel="保存中…">
-          保存する
+          {MEAL_TYPE_LABELS[mealType]}を保存する
         </ButtonLoadingContent>
       </button>
 

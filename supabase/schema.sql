@@ -57,6 +57,19 @@ create table if not exists public.advices (
   unique (user_id, advice_date)
 );
 
+create table if not exists public.daily_comments (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users (id) on delete cascade,
+  comment_date date not null,
+  condition text,
+  sleep_hours numeric,
+  hunger text,
+  free_comment text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, comment_date)
+);
+
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users (id) on delete cascade,
@@ -87,6 +100,7 @@ alter table public.meals enable row level security;
 alter table public.workouts enable row level security;
 alter table public.weight_logs enable row level security;
 alter table public.advices enable row level security;
+alter table public.daily_comments enable row level security;
 alter table public.notifications enable row level security;
 
 create policy "users_select_own" on public.users for select using (auth.uid() = id);
@@ -97,6 +111,7 @@ create policy "meals_all_own" on public.meals for all using (auth.uid() = user_i
 create policy "workouts_all_own" on public.workouts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "weight_logs_all_own" on public.weight_logs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "advices_all_own" on public.advices for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "daily_comments_all_own" on public.daily_comments for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "notifications_select_own" on public.notifications for select using (auth.uid() = user_id);
 
 -- トレーナー向け顧客管理: trainer と既存 users を紐付ける
@@ -133,4 +148,23 @@ create table if not exists public.coach_analyses (
 alter table public.coach_analyses enable row level security;
 
 create policy "coach_analyses_owner" on public.coach_analyses
+  for all using (auth.uid() = trainer_id) with check (auth.uid() = trainer_id);
+
+-- トレーナー指導メモ
+create table if not exists public.trainer_memos (
+  id uuid primary key default gen_random_uuid(),
+  trainer_id uuid not null references public.users (id) on delete cascade,
+  client_id uuid not null references public.clients (id) on delete cascade,
+  user_id uuid not null references public.users (id) on delete cascade,
+  memo_date date not null,
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists trainer_memos_client_date_idx
+  on public.trainer_memos (client_id, memo_date desc, created_at desc);
+
+alter table public.trainer_memos enable row level security;
+
+create policy "trainer_memos_owner" on public.trainer_memos
   for all using (auth.uid() = trainer_id) with check (auth.uid() = trainer_id);

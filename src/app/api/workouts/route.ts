@@ -16,6 +16,34 @@ export async function GET() {
   return NextResponse.json({ workouts: data });
 }
 
+/** 同じ日時のセッション全体の日時を一括更新 */
+export async function PATCH(req: Request) {
+  const { error, user, supabase } = await getAuthContext();
+  if (error) return error;
+
+  const body = (await req.json()) as {
+    from_performed_at?: string;
+    performed_at?: string;
+  };
+
+  if (!body.from_performed_at) {
+    return NextResponse.json({ error: 'from_performed_at is required' }, { status: 400 });
+  }
+  if (!body.performed_at) {
+    return NextResponse.json({ error: 'performed_at is required' }, { status: 400 });
+  }
+
+  const { data, error: dbError } = await supabase!
+    .from('workouts')
+    .update({ performed_at: body.performed_at })
+    .eq('user_id', user!.id)
+    .eq('performed_at', body.from_performed_at)
+    .select();
+
+  if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
+  return NextResponse.json({ workouts: data ?? [] });
+}
+
 export async function POST(req: Request) {
   const { error, user, supabase } = await getAuthContext();
   if (error) return error;

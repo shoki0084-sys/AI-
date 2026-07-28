@@ -6,6 +6,11 @@
   html {
     -webkit-text-size-adjust: 100%;
   }
+  button,
+  a,
+  [role='button'] {
+    -webkit-tap-highlight-color: transparent;
+  }
   input,
   select,
   textarea {
@@ -23,35 +28,51 @@
   }
 
   .btn-primary {
-    @apply inline-flex w-full min-h-[48px] items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition active:scale-[0.98] active:bg-blue-700 disabled:opacity-50;
+    @apply inline-flex w-full min-h-[48px] touch-manipulation items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition duration-150 active:scale-[0.96] active:bg-blue-700 disabled:opacity-50;
   }
 
   .btn-primary-sm {
-    @apply inline-flex min-h-[36px] shrink-0 items-center justify-center rounded-xl bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] active:bg-blue-700 disabled:opacity-50;
+    @apply inline-flex min-h-[36px] shrink-0 touch-manipulation items-center justify-center rounded-xl bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition duration-150 active:scale-[0.96] active:bg-blue-700 disabled:opacity-50;
   }
 
   .btn-secondary {
-    @apply inline-flex min-h-[40px] items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition active:scale-[0.98] active:bg-gray-50 disabled:opacity-50;
+    @apply inline-flex min-h-[40px] touch-manipulation items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition duration-150 active:scale-[0.96] active:bg-gray-50 disabled:opacity-50;
   }
 
   .btn-outline {
-    @apply inline-flex w-full min-h-[48px] items-center justify-center rounded-xl border-2 border-blue-600 bg-white px-4 py-3 text-base font-semibold text-blue-600 transition active:scale-[0.98] active:bg-blue-50 disabled:opacity-50;
+    @apply inline-flex w-full min-h-[48px] touch-manipulation items-center justify-center rounded-xl border-2 border-blue-600 bg-white px-4 py-3 text-base font-semibold text-blue-600 transition duration-150 active:scale-[0.96] active:bg-blue-50 disabled:opacity-50;
   }
 
   .btn-ghost {
-    @apply text-sm font-semibold text-blue-600 transition active:text-blue-700;
+    @apply inline-flex touch-manipulation items-center justify-center rounded-lg px-2.5 py-1.5 text-sm font-semibold text-blue-600 transition duration-150 active:scale-95 active:bg-blue-50 active:text-blue-800;
   }
 
   .btn-danger-ghost {
-    @apply text-xs font-medium text-rose-600 transition active:text-rose-700;
+    @apply inline-flex touch-manipulation items-center justify-center rounded-lg px-2 py-1 text-xs font-medium text-rose-600 transition duration-150 active:scale-95 active:bg-rose-50 active:text-rose-800;
   }
 
   .btn-segment {
-    @apply rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-sm font-medium text-gray-600 transition active:scale-[0.98];
+    @apply touch-manipulation rounded-xl border border-gray-200 bg-white px-2 py-2.5 text-sm font-medium text-gray-600 transition duration-150 active:scale-[0.96] active:bg-gray-50;
   }
 
   .btn-segment-active {
     @apply border-blue-600 bg-blue-50 text-blue-700 shadow-sm;
+  }
+
+  .chip {
+    @apply touch-manipulation rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition duration-150 active:scale-95 active:border-blue-400 active:bg-blue-50 active:text-blue-700;
+  }
+
+  .chip-active {
+    @apply border-blue-600 bg-blue-50 text-blue-700;
+  }
+
+  .chip-flash {
+    @apply animate-chip-flash border-blue-400 bg-blue-50 text-blue-700;
+  }
+
+  .row-enter {
+    @apply animate-row-in;
   }
 
   .card {
@@ -59,7 +80,7 @@
   }
 
   .card-interactive {
-    @apply card transition active:scale-[0.99] active:bg-gray-50;
+    @apply card touch-manipulation transition duration-150 active:scale-[0.98] active:bg-gray-50;
   }
 
   .card-nested {
@@ -94,8 +115,12 @@
     @apply h-full rounded-full bg-blue-500 transition-all duration-500;
   }
 
-  .progress-fill-success {
-    @apply bg-emerald-500;
+  .progress-fill-over {
+    @apply bg-orange-500;
+  }
+
+  .progress-fill-warn {
+    @apply bg-amber-400;
   }
 
   .macro-p {

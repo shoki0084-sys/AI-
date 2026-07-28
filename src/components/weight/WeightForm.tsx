@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { parseApiResponse } from '@/lib/api-client';
+import { datetimeLocalToIso, toDatetimeLocalValue } from '@/lib/datetime';
 import {
   ButtonLoadingContent,
   FormLoadingOverlay,
@@ -14,7 +15,7 @@ type Props = {
 export default function WeightForm({ onSaved }: Props) {
   const [weightKg, setWeightKg] = useState('');
   const [bodyFat, setBodyFat] = useState('');
-  const [measuredAt, setMeasuredAt] = useState(new Date().toISOString().slice(0, 16));
+  const [measuredAt, setMeasuredAt] = useState(() => toDatetimeLocalValue());
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -37,7 +38,7 @@ export default function WeightForm({ onSaved }: Props) {
         body: JSON.stringify({
           weight_kg: weight,
           body_fat: bodyFat ? Number(bodyFat) : null,
-          measured_at: new Date(measuredAt).toISOString(),
+          measured_at: datetimeLocalToIso(measuredAt),
         }),
       });
       await parseApiResponse(res);

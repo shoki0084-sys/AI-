@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/api/auth';
-import { getJstDayBounds, getJstDayBoundsFromString } from '@/lib/datetime';
-import type { MealBatchInput, MealInput } from '@/types/meal';
+import {
+  getJstDayBounds,
+  getJstDayBoundsFromString,
+  toJstDateString,
+} from '@/lib/datetime';
+import { formatFoodName } from '@/lib/foods/food-name';
+import type { MealBatchInput, MealInput, MealType } from '@/types/meal';
 
 const ALLOWED_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 
@@ -17,12 +22,18 @@ export async function GET(req: Request) {
     .select('*')
     .eq('user_id', user!.id);
 
+  let dayLabel: string | null = null;
   if (scope === 'today' || dateParam) {
     try {
-      const { start, end } = dateParam
+      const bounds = dateParam
         ? getJstDayBoundsFromString(dateParam)
         : getJstDayBounds();
-      query = query.gte('eaten_at', start).lte('eaten_at', end);
+      dayLabel = bounds.label;
+      // PostgREST 比較用に少しだけ余裕を持たせ、最終的に JST 日付で絞り込む
+      const padMs = 12 * 60 * 60 * 1000;
+      const startPad = new Date(new Date(bounds.start).getTime() - padMs).toISOString();
+      const endPad = new Date(new Date(bounds.end).getTime() + padMs).toISOString();
+      query = query.gte('eaten_at', startPad).lte('eaten_at', endPad);
     } catch {
       return NextResponse.json({ error: 'invalid date' }, { status: 400 });
     }
@@ -31,11 +42,57 @@ export async function GET(req: Request) {
   const { data, error: dbError } = await query.order('eaten_at', { ascending: false });
 
   if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
-  return NextResponse.json({ meals: data });
+
+  const meals =
+    dayLabel == null
+      ? data
+      : (data ?? []).filter((m) => toJstDateString(m.eaten_at) === dayLabel);
+
+  return NextResponse.json({ meals });
 }
 
-function formatFoodName(name: string, amount: string) {
-  return amount ? `${name.trim()} (${amount.trim()})` : name.trim();
+/** 複数件の日時・区分を一括更新 */
+export async function PATCH(req: Request) {
+  const { error, user, supabase } = await getAuthContext();
+  if (error) return error;
+
+  const body = (await req.json()) as {
+    ids?: string[];
+    eaten_at?: string;
+    meal_type?: MealType;
+  };
+
+  const ids = (body.ids ?? []).filter(Boolean);
+  if (ids.length === 0) {
+    return NextResponse.json({ error: 'ids is required' }, { status: 400 });
+  }
+
+  const updates: { eaten_at?: string; meal_type?: MealType } = {};
+  if (body.eaten_at != null) {
+    if (!body.eaten_at) {
+      return NextResponse.json({ error: 'eaten_at is required' }, { status: 400 });
+    }
+    updates.eaten_at = body.eaten_at;
+  }
+  if (body.meal_type != null) {
+    if (!ALLOWED_TYPES.includes(body.meal_type)) {
+      return NextResponse.json({ error: 'invalid meal_type' }, { status: 400 });
+    }
+    updates.meal_type = body.meal_type;
+  }
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: 'no fields to update' }, { status: 400 });
+  }
+
+  const { data, error: dbError } = await supabase!
+    .from('meals')
+    .update(updates)
+    .eq('user_id', user!.id)
+    .in('id', ids)
+    .select();
+
+  if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
+  return NextResponse.json({ meals: data ?? [] });
 }
 
 export async function POST(req: Request) {
